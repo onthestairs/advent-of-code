@@ -2,6 +2,7 @@ module Day6 where
 
 import Prelude
 
+import Control.Alt (alt)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (logShow)
 import Control.Monad.Eff.Exception (EXCEPTION)
