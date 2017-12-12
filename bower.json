@@ -21,7 +21,8 @@
     "purescript-sets": "^3.1.0",
     "purescript-graphs": "^3.0.0",
     "purescript-tree": "^1.3.1",
-    "purescript-folds": "^3.1.0"
+    "purescript-folds": "^3.1.0",
+    "purescript-tailrec": "^3.3.0"
   },
   "devDependencies": {
     "purescript-psci-support": "^3.0.0"
