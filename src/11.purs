@@ -30,27 +30,35 @@ data Hex = Hex {
   r :: Int
 }
 
+q :: Hex -> Int
 q (Hex {q, r}) = q
+r :: Hex -> Int
 r (Hex {q, r}) = r
+s :: Hex -> Int
 s (Hex {q, r}) = 0 - q - r
 
+zero :: Hex
 zero = Hex {
   q: 0,
   r: 0
 }
 
+add :: Hex -> Hex -> Hex
 add h1 h2 = Hex {
   q: (q h1) + (q h2),
   r: (r h1) + (r h2)
 }
 
+subtract :: Hex -> Hex -> Hex
 subtract h1 h2 = Hex {
   q: (q h1) - (q h2),
   r: (r h1) - (r h2)
 }
 
+hlength :: Hex -> Int
 hlength h = (abs (q h) + abs (r h) + abs (s h)) / 2
 
+distance :: Hex -> Hex -> Int
 distance h1 h2 = hlength (subtract h1 h2)
 
 ---------
@@ -74,6 +82,7 @@ getInput :: forall eff. FilePath -> Eff (fs :: FS, exception :: EXCEPTION | eff)
 getInput filename =
   map (parseString <<< trim) (readTextFile UTF8 filename)
 
+directionToDelta :: Direction -> Hex
 directionToDelta S  = Hex {q: 0,  r: -1}
 directionToDelta SW = Hex {q: -1, r: 0}
 directionToDelta SE = Hex {q: 1,  r: -1}
@@ -82,13 +91,13 @@ directionToDelta NW = Hex {q: -1, r: 1}
 directionToDelta N  = Hex {q: 0,  r: 1}
 
 solve :: List Direction -> Int
-solve ds = hlength $ spy $ foldl add zero (map directionToDelta ds)
+solve ds = hlength $ foldl add zero (map directionToDelta ds)
 
 solve' = (map <<< map) solve (getInput "./src/11.txt") >>= logShow
 
 ------
 
--- custom recursions as stack was getting too large with a scanl. baffled as
+-- custom recursion as stack was getting too large with a scanl. baffled as
 -- there are only ~8,000 directions
 
 solve2 :: List Direction -> Int
