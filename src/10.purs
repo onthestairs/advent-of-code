@@ -108,12 +108,15 @@ padLeft c n s = padding <> s
 denseHashToString :: List Int -> String
 denseHashToString xs = (joinWith "" <<< Array.fromFoldable) $ map (padLeft '0' 2 <<< toStringAs hexadecimal) xs
 
-solve2 :: Array Char -> String
-solve2 cs = (denseHashToString <<< sparseHashToDenseHash) sparseHash
+knotHash :: Array Char -> String
+knotHash cs = (denseHashToString <<< sparseHashToDenseHash) sparseHash
   where sparseHash = (\(State s) -> s.xs) $ foldl (\s _ -> performKnots s ls) initialState (range 0 63)
         ls = fromFoldable $ map toCharCode cs <> extra
         extra = [17, 31, 73, 47, 23]
         xs = range 0 255
         initialState = State {position: 0, skipSize: 0, xs: xs}
+
+solve2 :: Array Char -> String
+solve2 cs = knotHash cs
 
 solve2' = map solve2 (getInput2 "./src/10.txt") >>= logShow

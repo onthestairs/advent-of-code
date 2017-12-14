@@ -65,6 +65,11 @@ solve' = (map <<< map) solve (getInput "./src/12.txt") >>= logShow
 
 ------
 
+connectedRegions :: forall k. Ord k => Graph.Graph k k -> Int
+connectedRegions g = length $ foldl (\ms n -> go n ms) Nil ns
+  where ns = Graph.vertices g
+        go n ms = if (elem n $ concat ms) then ms else ((recursiveOutNodes n g) : ms)
+
 solve2 :: Input -> Int
 solve2 xs = length $ foldl (\ms n -> go n ms) Nil ns
   where g :: Graph.Graph Int Int
