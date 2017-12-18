@@ -9,8 +9,10 @@ import Control.Monad.Eff.Console (logShow)
 import Control.Monad.Eff.Exception (EXCEPTION, name)
 import Control.Monad.Rec.Class (Step(..), tailRec)
 import Data.Array (concatMap, fromFoldable, length, nub, (!!))
+import Data.BigInt (BigInt, fromInt, toNumber)
 import Data.Either (Either)
 import Data.Generic (class Generic, gShow)
+import Data.Int (round)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String (trim)
@@ -131,14 +133,14 @@ getInput filename =
 
 -----
 
-type RegistryState = Int
+type RegistryState = BigInt
 type Registry = Map.Map Name RegistryState
 
 type State = {
   instructions :: Array Instruction,
   position :: Int,
   registry :: Registry,
-  lastPlayedFrequency :: Maybe Int
+  lastPlayedFrequency :: Maybe BigInt
 }
 
 showState :: State -> String
@@ -146,14 +148,14 @@ showState s = show m <> " " <> "(" <> show currentInstruction <> ")" <> " " <> s
   where currentInstruction = s.instructions !! s.position
         m = map (\(Tuple k v) -> show k <> ":" <> show v) $ (Map.toUnfoldable s.registry :: Array (Tuple Name RegistryState))
 
-getValue :: Registry -> ValueOrReference -> Maybe Int
-getValue r (Value n) = Just n
+getValue :: Registry -> ValueOrReference -> Maybe BigInt
+getValue r (Value n) = Just (fromInt n)
 getValue r (Reference name) = Map.lookup name r
 
 modifyName :: Name -> (RegistryState -> RegistryState) -> Registry -> Registry
 modifyName name f r = Map.update (Just <<< f) name r
 
-runStepValueInstruction :: State -> Name -> ValueOrReference -> (Int -> Int -> Int) -> State
+runStepValueInstruction :: State -> Name -> ValueOrReference -> (BigInt -> BigInt -> BigInt) -> State
 runStepValueInstruction s name val f = s {registry = newRegistry, position = s.position + 1}
   where value = getValue s.registry val
         newRegistry = case value of
@@ -161,7 +163,7 @@ runStepValueInstruction s name val f = s {registry = newRegistry, position = s.p
           Just v -> modifyName name (\prev -> f prev v) s.registry
 
 runInstruction :: State -> Instruction -> State
-runInstruction s (Play val) = s { lastPlayedFrequency = spy value, position = s.position + 1 }
+runInstruction s (Play val) = s { lastPlayedFrequency = value, position = s.position + 1 }
   where value = getValue s.registry val
 runInstruction s (Set name val) = runStepValueInstruction s name val (\prev value -> value)
 runInstruction s (Add name val) = runStepValueInstruction s name val (\prev value -> prev + value)
@@ -170,29 +172,32 @@ runInstruction s (Modulo name val) = runStepValueInstruction s name val (\prev v
 runInstruction s (Recover name) =
   case Map.lookup name s.registry of
     Nothing -> s { position = s.position + 1 }
-    Just 0 -> s { position = s.position + 1 }
-    otherwise -> case s.lastPlayedFrequency of
-      Nothing -> s { position = s.position + 1 }
-      Just n -> s { registry = Map.insert name n s.registry }
-runInstruction s (Jump name1 name2) = if v1 > 0 then s { position = s.position + v2 } else s { position = s.position + 1 }
-  where v1 = fromMaybe 0 $ getValue s.registry name1
-        v2 = fromMaybe 0 $ getValue s.registry name2
+    Just n ->
+      if n == (fromInt 0)
+      then s { position = s.position + 1 }
+      else case s.lastPlayedFrequency of
+        Nothing -> s { position = s.position + 1 }
+        Just n -> s { registry = Map.insert name n s.registry }
+runInstruction s (Jump name1 name2) = if v1 > (fromInt 0) then s { position = s.position + v2' } else s { position = s.position + 1 }
+  where v1 = fromMaybe (fromInt 0) $ getValue s.registry name1
+        v2 = fromMaybe (fromInt 0) $ getValue s.registry name2
+        v2' = round $ toNumber v2
 
-findFrequency :: State -> Maybe Int
+findFrequency :: State -> Maybe BigInt
 findFrequency initialState = tailRec go initialState
   where go state = case nextInstruction of
                       Nothing -> Done Nothing
                       Just instruction@(Recover name) -> case Map.lookup name state.registry of
                         Nothing -> Loop (runInstruction state instruction)
-                        Just 0 -> Loop (runInstruction state instruction)
-                        Just n -> Done state.lastPlayedFrequency
+                        Just n ->
+                          if n == fromInt 0
+                          then Loop (runInstruction state instruction)
+                          else Done state.lastPlayedFrequency
                       Just instruction -> Loop (runInstruction state instruction)
                    where nextInstruction = state.instructions !! state.position
-                         blah = spy (showState state)
-        -- blah1 = spy (Map.keys initialState.registry)
 
 makeInitialRegistry :: Input -> Registry
-makeInitialRegistry instructions = Map.fromFoldable $ map (\name -> Tuple name 0) $ nub $ concatMap usedNames instructions
+makeInitialRegistry instructions = Map.fromFoldable $ map (\name -> Tuple name (fromInt 0)) $ nub $ concatMap usedNames instructions
   where usedNames (Set n _) = [n]
         usedNames (Add n _) = [n]
         usedNames (Multiply n _) = [n]
@@ -200,7 +205,7 @@ makeInitialRegistry instructions = Map.fromFoldable $ map (\name -> Tuple name 0
         usedNames (Recover n) = [n]
         usedNames _ = []
 
-solve :: Input -> Maybe Int
+solve :: Input -> Maybe BigInt
 solve instructions = findFrequency initialState
   where initialState = {
           instructions: instructions,
