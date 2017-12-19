@@ -41,43 +41,46 @@ solve = length $ filter ((==) One) (concat hashBits)
 
 -----
 
-type Coord = Tuple Int Int
-s :: Int -> Int -> String
-s row col = show row <> "," <> show col
-type Bits = Map.StrMap Bit
 
-bits :: Bits
-bits = Map.fromFoldable $ concat $ mapWithIndex (\row bits -> mapWithIndex (\col bit -> Tuple (s row col) bit) bits) hashBits
-  where n = 128
-        hashes = map (knotHash <<< makeChars) (range 0 (n-1))
-        hashBits = map hashToBits hashes
 
--- findAdjacents :: Coord -> Array Coord
--- findAdjacents (row /\ col) = [
+--
+-- type Coord = Tuple Int Int
+-- s :: Int -> Int -> String
+-- s row col = show row <> "," <> show col
+-- type Bits = Map.StrMap Bit
+--
+-- bits :: Bits
+-- bits = Map.fromFoldable $ concat $ mapWithIndex (\row bits -> mapWithIndex (\col bit -> Tuple (s row col) bit) bits) hashBits
+--   where n = 128
+--         hashes = map (knotHash <<< makeChars) (range 0 (n-1))
+--         hashBits = map hashToBits hashes
+--
+-- -- findAdjacents :: Coord -> Array Coord
+-- -- findAdjacents (row /\ col) = [
+-- --   (row + 1) /\ col,
+-- --   (row - 1) /\ col,
+-- --   row /\ (col + 1),
+-- --   row /\ (col - 1)
+-- -- ]
+-- findAdjacents :: Partial => String -> Array String
+-- findAdjacents t = map (\(row /\ col) -> s row col) [
 --   (row + 1) /\ col,
 --   (row - 1) /\ col,
 --   row /\ (col + 1),
 --   row /\ (col - 1)
 -- ]
-findAdjacents :: Partial => String -> Array String
-findAdjacents t = map (\(row /\ col) -> s row col) [
-  (row + 1) /\ col,
-  (row - 1) /\ col,
-  row /\ (col + 1),
-  row /\ (col - 1)
-]
-  where [rowS, colS] = split (Pattern ",") t
-        row = (readInt <<< List.fromFoldable <<< toCharArray) rowS
-        col = (readInt <<< List.fromFoldable <<< toCharArray) colS
-
-makeGraph :: Bits -> Graph.Graph String String
-makeGraph bits = unfoldGraph oneCoords id adjacentOneCoords
-  where oneCoords = Map.keys $ Map.filter ((==) One) bits
-        adjacentOneCoords :: String -> Array String
-        adjacentOneCoords c = filter isOne (unsafePartial $ findAdjacents c)
-        isOne :: String -> Boolean
-        isOne t = (Map.lookup t bits) == (Just One)
-
-solve2 = connectedRegions g
-  where g = makeGraph bits
-        -- blah = spy ((length $ Graph.vertices g) :: Int)
+--   where [rowS, colS] = split (Pattern ",") t
+--         row = (readInt <<< List.fromFoldable <<< toCharArray) rowS
+--         col = (readInt <<< List.fromFoldable <<< toCharArray) colS
+--
+-- makeGraph :: Bits -> Graph.Graph String String
+-- makeGraph bits = unfoldGraph oneCoords id adjacentOneCoords
+--   where oneCoords = Map.keys $ Map.filter ((==) One) bits
+--         adjacentOneCoords :: String -> Array String
+--         adjacentOneCoords c = filter isOne (unsafePartial $ findAdjacents c)
+--         isOne :: String -> Boolean
+--         isOne t = (Map.lookup t bits) == (Just One)
+--
+-- solve2 = connectedRegions g
+--   where g = makeGraph bits
+--         -- blah = spy ((length $ Graph.vertices g) :: Int)

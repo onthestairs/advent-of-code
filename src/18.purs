@@ -8,21 +8,23 @@ import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (logShow)
 import Control.Monad.Eff.Exception (EXCEPTION, name)
 import Control.Monad.Rec.Class (Step(..), tailRec)
-import Data.Array (concatMap, fromFoldable, length, nub, (!!))
+import Data.Array (concatMap, fromFoldable, length, nub, null, snoc, uncons, (!!))
 import Data.BigInt (BigInt, fromInt, toNumber)
 import Data.Either (Either)
 import Data.Generic (class Generic, gShow)
 import Data.Int (round)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromJust, fromMaybe)
 import Data.String (trim)
 import Data.Tuple (Tuple(..))
+import Data.Tuple.Nested ((/\))
 import Day8 (parseSignedInt)
-import Debug.Trace (spy)
+import Debug.Trace (spy, trace)
 import Node.Encoding (Encoding(..))
 import Node.FS (FS)
 import Node.FS.Sync (readTextFile)
 import Node.Path (FilePath)
+import Partial.Unsafe (unsafePartial)
 import Text.Parsing.StringParser (ParseError(..), Parser(..), runParser)
 import Text.Parsing.StringParser.Combinators (many1, sepBy1)
 import Text.Parsing.StringParser.String (char, lowerCaseChar, skipSpaces, string, whiteSpace)
@@ -155,7 +157,7 @@ getValue r (Reference name) = Map.lookup name r
 modifyName :: Name -> (RegistryState -> RegistryState) -> Registry -> Registry
 modifyName name f r = Map.update (Just <<< f) name r
 
-runStepValueInstruction :: State -> Name -> ValueOrReference -> (BigInt -> BigInt -> BigInt) -> State
+runStepValueInstruction :: forall r. { registry :: Registry, position :: Int | r } -> Name -> ValueOrReference -> (BigInt -> BigInt -> BigInt) -> { registry :: Registry, position :: Int | r }
 runStepValueInstruction s name val f = s {registry = newRegistry, position = s.position + 1}
   where value = getValue s.registry val
         newRegistry = case value of
@@ -196,23 +198,120 @@ findFrequency initialState = tailRec go initialState
                       Just instruction -> Loop (runInstruction state instruction)
                    where nextInstruction = state.instructions !! state.position
 
-makeInitialRegistry :: Input -> Registry
-makeInitialRegistry instructions = Map.fromFoldable $ map (\name -> Tuple name (fromInt 0)) $ nub $ concatMap usedNames instructions
+makeInitialRegistry :: Input -> Int -> Registry
+makeInitialRegistry instructions startingValue = Map.fromFoldable $ map (\name -> Tuple name (fromInt startingValue)) $ nub $ concatMap usedNames instructions
   where usedNames (Set n _) = [n]
         usedNames (Add n _) = [n]
         usedNames (Multiply n _) = [n]
         usedNames (Modulo n _) = [n]
         usedNames (Recover n) = [n]
-        usedNames _ = []
+        usedNames (Play v) = valueOrReferenceUsedNames v
+        usedNames (Jump v1 v2) = valueOrReferenceUsedNames v1 <> valueOrReferenceUsedNames v2
+
+valueOrReferenceUsedNames :: ValueOrReference -> Array Name
+valueOrReferenceUsedNames (Value _) = []
+valueOrReferenceUsedNames (Reference n) = [n]
 
 solve :: Input -> Maybe BigInt
 solve instructions = findFrequency initialState
   where initialState = {
           instructions: instructions,
           position: 0,
-          registry: makeInitialRegistry instructions,
+          registry: makeInitialRegistry instructions 0,
           lastPlayedFrequency: Nothing
         }
 
 
 solve' = (map <<< map) solve (getInput "./src/18.txt") >>= logShow
+
+
+----------
+
+type DuetState = {
+  instructions :: Array Instruction,
+  position :: Int,
+  registry :: Registry,
+  incoming :: Array BigInt,
+  outgoing :: Array BigInt
+}
+
+data RunningProgram = Zero | One
+derive instance eqRunningProgram :: Eq RunningProgram
+instance showRunningProgram :: Show RunningProgram where
+  show Zero = "Zero"
+  show One = "One"
+other Zero = One
+other One = Zero
+
+type Duet = {
+  running :: DuetState,
+  waiting :: DuetState,
+  active :: RunningProgram
+}
+
+data ExecutionState a = Waiting a | Running a
+
+runInstructionDuet :: DuetState -> Instruction -> ExecutionState DuetState
+runInstructionDuet s (Play val) = Running $ s { outgoing = snoc s.outgoing value, position = s.position + 1 }
+  where value = unsafePartial $ fromJust $ getValue s.registry val
+runInstructionDuet s (Set name val) = Running $ runStepValueInstruction s name val (\prev value -> value)
+runInstructionDuet s (Add name val) = Running $ runStepValueInstruction s name val (\prev value -> prev + value)
+runInstructionDuet s (Multiply name val) = Running $ runStepValueInstruction s name val (\prev value -> prev * value)
+runInstructionDuet s (Modulo name val) = Running $ runStepValueInstruction s name val (\prev value -> prev `mod` value)
+runInstructionDuet s (Recover name) = case uncons s.incoming of
+  Nothing -> Waiting s
+  Just {head: x, tail: xs} -> Running $ s { registry = Map.insert name x s.registry, incoming = xs, position = s.position + 1 }
+runInstructionDuet s (Jump name1 name2) = if v1 > (fromInt 0) then Running $ s { position = s.position + v2' } else Running $ s { position = s.position + 1 }
+  where v1 = fromMaybe (fromInt 0) $ getValue s.registry name1
+        v2 = fromMaybe (fromInt 0) $ getValue s.registry name2
+        v2' = round $ toNumber v2
+
+runProgramUntilWaiting :: DuetState -> Maybe DuetState
+runProgramUntilWaiting s = tailRec go s
+  where go state = case nextInstruction of
+                      Nothing -> Done Nothing
+                      Just instruction -> case runInstructionDuet state instruction of
+                        Running s -> Loop s
+                        Waiting s -> Done (Just s)
+                   where nextInstruction = state.instructions !! state.position
+
+
+transferOutgoingToIncoming finished upNext =
+  finished { outgoing = [] } /\ upNext { incoming = finished.outgoing }
+
+runUntilDeadlock :: Duet -> Int
+runUntilDeadlock duet = tailRec go initialState
+  where initialState = {
+          duet: duet,
+          oneCount: 0
+        }
+        go state = case runProgramUntilWaiting state.duet.running of
+          Nothing -> Done state.oneCount
+          Just finishedRunning ->
+            if null finishedRunning.outgoing
+            then Done state.oneCount
+            else let nextWaiting /\ nextRunning = transferOutgoingToIncoming finishedRunning state.duet.waiting
+                     sentOnes = if state.duet.active == One then length finishedRunning.outgoing else 0
+                 in Loop {
+                       oneCount: state.oneCount + sentOnes,
+                       duet: {
+                         running: nextRunning,
+                         waiting: nextWaiting,
+                         active: other state.duet.active
+                       }
+                     }
+
+makeInitialDuetState :: Array Instruction -> Int -> DuetState
+makeInitialDuetState is v = {
+  instructions: is,
+  position: 0,
+  registry: makeInitialRegistry is v,
+  outgoing: [],
+  incoming: []
+}
+
+solve2 instructions = runUntilDeadlock {running: running, waiting: waiting, active: Zero}
+  where running = makeInitialDuetState instructions 0
+        waiting = makeInitialDuetState instructions 1
+
+solve2' = (map <<< map) solve2 (getInput "./src/18.txt") >>= logShow
