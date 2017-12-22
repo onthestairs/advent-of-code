@@ -67,13 +67,21 @@ popSet s = case Set.findMin s of
   Just x -> Just {value: x, rest: Set.delete x s}
 
 connectedBits :: OnBits -> Coord -> Set.Set Coord
-connectedBits onBits c = tailRec go {connected: Set.empty, queue: Set.singleton c}
+connectedBits onBits c = tailRec go {connected: Set.empty, seen: Set.empty, queue: Set.singleton c}
   where go state = case popSet state.queue of
                     Nothing -> Done state.connected
                     Just {value: x, rest: xs} ->
                       if Set.member x onBits
-                      then Loop {connected: Set.insert x state.connected, queue: Set.union xs (Set.difference (adjacents x) state.connected)}
-                      else Loop {connected: state.connected, queue: xs}
+                      then Loop {
+                        connected: Set.insert x state.connected,
+                        seen: state.seen,
+                        queue: Set.union xs (Set.difference (adjacents x) (Set.union state.seen state.connected))
+                      }
+                      else Loop {
+                        connected: state.connected,
+                        seen: Set.insert x state.seen,
+                        queue: xs
+                      }
 
 connectedRegions :: forall k f. Ord k => Foldable f => (f k) -> (k -> Set.Set k) -> Int
 connectedRegions ns f = length $ foldlDefault (\ms n -> go n ms) [] ns
@@ -82,12 +90,12 @@ connectedRegions ns f = length $ foldlDefault (\ms n -> go n ms) [] ns
 solve2 = connectedRegions onBits (connectedBits onBits)
   where onBits = makeOnBits
 
---
--- testOnBits = Set.fromFoldable [(0 /\ 0), (1 /\ 0), (2 /\ 0)]
---
--- solveTest = connectedRegions onBits (connectedBits onBits)
---   where onBits = testOnBits
---
---
--- solveTest' = connectedBits onBits (0 /\ 0)
---   where onBits = testOnBits
+
+testOnBits = Set.fromFoldable [(0 /\ 0), (1 /\ 0), (2 /\ 0)]
+
+solveTest = connectedRegions onBits (connectedBits onBits)
+  where onBits = testOnBits
+
+
+solveTest' = connectedBits onBits (0 /\ 0)
+  where onBits = testOnBits
