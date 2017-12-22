@@ -8,6 +8,7 @@ import Control.Fold (Fold, foldl, unfoldFold_)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (logShow)
 import Control.Monad.Eff.Exception (EXCEPTION)
+import Control.Monad.Rec.Class (Step(..), tailRec)
 import Data.Array as Array
 import Data.Either (Either)
 import Data.Foldable (length)
@@ -63,10 +64,10 @@ getInput filename =
   map (parseString <<< trim) (readTextFile UTF8 filename)
 
 
-type Line = List Char
+type Line = Array Char
 startingLine :: Line
 
-startingLine = fromFoldable $ ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']
+startingLine = Array.fromFoldable $ ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']
 
 dance :: Line -> Fold DanceMove Line
 dance l = unfoldFold_ l performDanceMove
@@ -77,30 +78,41 @@ performDanceMove l (Exchange a b) = exchange l a b
 performDanceMove l (Partner a b) = partner l a b
 
 spin :: Line -> Int -> Line
-spin l n = drop m l <> take m l
+spin l n = Array.drop m l <> Array.take m l
   where m = (length l) - n
 
 exchange :: Line -> Int -> Int -> Line
 exchange l a b = fromMaybe l $ do
-  aVal <- l !! a
-  bVal <- l !! b
-  aReplaced <- updateAt a bVal l
-  updateAt b aVal aReplaced
+  aVal <- l Array.!! a
+  bVal <- l Array.!! b
+  aReplaced <- Array.updateAt a bVal l
+  Array.updateAt b aVal aReplaced
 
 partner :: Line -> Char -> Char -> Line
 partner l a b = fromMaybe l $ lift2 (exchange l) aIndex bIndex
-  where aIndex = findIndex ((==) a) l
-        bIndex = findIndex ((==) b) l
+  where aIndex = Array.findIndex ((==) a) l
+        bIndex = Array.findIndex ((==) b) l
 
 
-solve danceMoves = fromCharArray $ Array.fromFoldable finalPosition
+solve danceMoves = fromCharArray $ finalPosition
   where finalPosition = foldl (dance startingLine) danceMoves
 solve' = (map <<< map) solve (getInput "./src/16.txt") >>= logShow
 
 
 ---------
 
+repeatF :: forall a. (a -> a) -> Int -> (a -> a)
+repeatF f 0 = id
+repeatF f n = f <<< (repeatF f (n-1))
+
+oneBillion = 1 * 1000 * 1000
+
+
 solve2 :: Input -> String
-solve2 danceMoves = solve (power danceMoves (1*1000*1000*1000))
+solve2 danceMoves = fromCharArray $ (repeatF fullDance fromStart) startingLine
+  where fullDance l = foldl (dance l) danceMoves
+        cycleLength = tailRec go {position: fullDance startingLine, n: 1}
+                      where go state = if state.position == startingLine then Done state.n else Loop {position: fullDance state.position, n: state.n + 1}
+        fromStart = oneBillion `mod` cycleLength
 
 solve2' = (map <<< map) solve2 (getInput "./src/16.txt") >>= logShow
