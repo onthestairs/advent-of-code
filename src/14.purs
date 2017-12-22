@@ -3,9 +3,9 @@ module Day14 where
 import Prelude
 
 import Control.Monad.Rec.Class (Step(..), tailRec)
-import Data.Array (concat, concatMap, cons, elem, filter, foldl, mapWithIndex, range, uncons)
+import Data.Array (concat, concatMap, cons, elem, filter, mapWithIndex, range, uncons)
 import Data.Array as Array
-import Data.Foldable (class Foldable, length)
+import Data.Foldable (class Foldable, foldlDefault, length)
 import Data.Graph (unfoldGraph)
 import Data.Graph as Graph
 import Data.Int (binary, fromStringAs, hexadecimal, toStringAs)
@@ -44,11 +44,6 @@ solve = length $ filter ((==) One) (concat hashBits)
 
 -----
 
-
-
---
--- s :: Int -> Int -> String
--- s row col = show row <> "," <> show col
 type Coord = Tuple Int Int
 type OnBits = Set.Set (Coord)
 --
@@ -71,19 +66,28 @@ popSet s = case Set.findMin s of
   Nothing -> Nothing
   Just x -> Just {value: x, rest: Set.delete x s}
 
-connectedBits :: OnBits -> Coord -> Array Coord
-connectedBits onBits c = Array.fromFoldable $ tailRec go {connected: Set.empty, queue: Set.singleton c}
+connectedBits :: OnBits -> Coord -> Set.Set Coord
+connectedBits onBits c = tailRec go {connected: Set.empty, queue: Set.singleton c}
   where go state = case popSet state.queue of
                     Nothing -> Done state.connected
                     Just {value: x, rest: xs} ->
                       if Set.member x onBits
-                      then Loop {connected: Set.insert x state.connected, queue: Set.union state.queue (Set.difference (adjacents x) state.connected)}
+                      then Loop {connected: Set.insert x state.connected, queue: Set.union xs (Set.difference (adjacents x) state.connected)}
                       else Loop {connected: state.connected, queue: xs}
 
-connectedRegions :: forall k f. Ord k => Foldable f => (f k) -> (k -> Array k) -> Int
-connectedRegions ns f = length $ foldl (\ms n -> go n ms) [] ns
-  where go n ms = if (elem n $ concat ms) then ms else (cons (f n) ms)
+connectedRegions :: forall k f. Ord k => Foldable f => (f k) -> (k -> Set.Set k) -> Int
+connectedRegions ns f = length $ foldlDefault (\ms n -> go n ms) [] ns
+  where go n ms = if (Set.member n (Set.unions ms)) then ms else (cons (f n) ms)
 
 solve2 = connectedRegions onBits (connectedBits onBits)
   where onBits = makeOnBits
-        -- blah = spy ((length $ Graph.vertices g) :: Int)
+
+--
+-- testOnBits = Set.fromFoldable [(0 /\ 0), (1 /\ 0), (2 /\ 0)]
+--
+-- solveTest = connectedRegions onBits (connectedBits onBits)
+--   where onBits = testOnBits
+--
+--
+-- solveTest' = connectedBits onBits (0 /\ 0)
+--   where onBits = testOnBits
