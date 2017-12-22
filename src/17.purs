@@ -3,8 +3,9 @@ module Day17 where
 import Prelude
 
 import Control.Fold (Fold, foldl, scanl, unfoldFold_)
+import Control.Monad.Rec.Class (Step(..), tailRec)
 import Data.Array (findIndex, insertAt, range, (!!))
-import Data.Maybe (Maybe, fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\))
 
@@ -48,5 +49,14 @@ stepToValue b x = b {position = i}
   where i = fromMaybe b.position $ findIndex ((==) x) b.buffer
 
 
+findValueAfterZero step limit = tailRec go initialState
+  where initialState = {valueAfterZero: Nothing, valueToPlace: 1, currentPosition: 0}
+        go state =
+          if state.valueToPlace > limit
+          then Done state.valueAfterZero
+          else Loop {valueAfterZero: nextValueAfterZero, valueToPlace: state.valueToPlace + 1, currentPosition: nextPosition}
+            where nextPosition = ((state.currentPosition + step) `mod` state.valueToPlace) + 1
+                  nextValueAfterZero = if nextPosition == 1 then Just state.valueToPlace else state.valueAfterZero
+
 fiftyMillion = 50*1000*1000
-solve2 = getValue $ flip step 1 $ flip stepToValue 0 $ foldl (insertAndMove 382) (range 1 fiftyMillion)
+solve2 = findValueAfterZero 382 fiftyMillion
