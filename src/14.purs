@@ -46,8 +46,8 @@ makeOnBits n = Set.fromFoldable $ map fst $ filter (\(Tuple _ bit) -> bit == One
   where hashes = map (knotHash <<< makeChars) (range 0 (n-1))
         hashBits = map hashToBits hashes
 
-adjacents :: Coord -> Set.Set Coord
-adjacents (row /\ col) = Set.fromFoldable [
+adjacents :: Coord -> List.List Coord
+adjacents (row /\ col) = List.fromFoldable [
   (row + 1) /\ col,
   (row - 1) /\ col,
   row /\ (col + 1),
@@ -68,7 +68,7 @@ connectedBits onBits c = tailRec go {connected: List.Nil, seen: List.Nil, queue:
                       then Loop {
                         connected: List.Cons x state.connected,
                         seen: List.Cons x state.seen,
-                        queue: Set.union xs (List.difference (adjacents x) (state.seen))
+                        queue: List.nub $ xs <> (List.difference (adjacents x) (state.seen))
                       }
                       else Loop {
                         connected: state.connected,
@@ -76,9 +76,9 @@ connectedBits onBits c = tailRec go {connected: List.Nil, seen: List.Nil, queue:
                         queue: xs
                       }
 
-connectedRegions :: forall k f. Ord k => Foldable f => (f k) -> (k -> Set.Set k) -> Int
-connectedRegions ns f = length $ foldlDefault (\ms n -> go n ms) [] ns
-  where go n ms = if (Set.member n (Set.unions ms)) then ms else (cons (f n) ms)
+connectedRegions :: forall k f. Ord k => Foldable f => (f k) -> (k -> List.List k) -> Int
+connectedRegions ns f = length $ foldlDefault (\ms n -> go n ms) List.Nil ns
+  where go n ms = if (List.elem n (List.concat ms)) then ms else (List.Cons (f n) ms)
 
 solve2 n = connectedRegions onBits (connectedBits onBits)
   where onBits = makeOnBits n
