@@ -1,0 +1,43 @@
+                    # a=1, b=0, c=0, d=0, e=0, f=0, g=0, h=0
+  set b 65          # set b = 65
+  set c b           # set c = b = 65
+  jnz a 2           # if a != 0 GOTO A
+  jnz 1 5           # GOTO B
+A mul b 100         # b = b * 100 (6,500)
+  sub b -100000     # b = b + 100,000 (106,500)
+  set c b           # c = b (106,500)
+  sub c -17000      # c = c + 17,000 (123,500)
+
+                    # at this point, b = 106,500, c = 123,500
+
+B set f 1           # f = 1
+  set d 2           # d = 2
+
+    D set e 2           # e = 2 (e = 2,3,4,5,6....)
+                        # f = 1, d = 2, e = 2
+
+      C set g d           # g = d (g = 2,3,4,5,6.....)
+        -- mul g e           # g = g * e
+        -- sub g b           # g = g - b (-alot)
+        jnz g 2           # if d * e == b:
+        set f 0           #     f = 0
+        sub e -1          # e = e + 1
+        -- set g e           # g = e
+        -- sub g b           # g = g - b
+        jnz g -8          # if e != b: GOTO C
+
+      sub d -1          # d = d + 1
+      -- set g d           # g = d
+      -- sub g b           # g = g - b
+      jnz g -13         # if d != b: GOTO D
+
+  jnz f 2           # if f == 0:
+  sub h -1          #     h = h + 1
+
+  -- set g b           # g = b
+  -- sub g c           # g = g - c
+  jnz g 2           # if c == b:
+  jnz 1 3           #    END
+
+  sub b -17         # b = b + 17
+  jnz 1 -23         # GOTO B

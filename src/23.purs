@@ -3,6 +3,7 @@ module Day23 where
 import Prelude
 
 import Control.Alt ((<|>))
+import Control.Fold (any, foldl)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (logShow)
 import Control.Monad.Eff.Exception (EXCEPTION)
@@ -12,13 +13,16 @@ import Data.Array as Array
 import Data.BigInt (BigInt, fromInt, toNumber)
 import Data.Either (Either)
 import Data.Generic (class Generic, gShow)
-import Data.Int (round)
+import Data.Int (floor, round)
+import Data.Int as DataInt
+import Data.List (filter, length, range)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromJust, fromMaybe)
 import Data.String (singleton, toCharArray, trim)
 import Data.Tuple (Tuple(..))
 import Day8 (parseSignedInt)
 import Debug.Trace (trace, traceShow)
+import Math (sqrt)
 import Node.Encoding (Encoding(..))
 import Node.FS (FS)
 import Node.FS.Sync (readTextFile)
@@ -117,8 +121,7 @@ showRegistry r = map (\(Tuple c n) -> singleton c <> ":" <> show (toNumber n)) $
 type State = {
   instructions :: Array Instruction,
   position :: Int,
-  registry :: Registry,
-  instructionsRead :: Int
+  registry :: Registry
 }
 
 getValue :: Registry -> ValueOrReference -> Maybe BigInt
@@ -146,12 +149,12 @@ runInstruction s (Jump name1 name2) = if v1 /= (fromInt 0) then s { position = s
 
 runWithAuxState :: forall a. State -> a -> (Instruction -> State -> a -> a) -> a
 runWithAuxState initialState initialAuxState f = tailRec go {instructionsState: initialState, auxState: initialAuxState}
-  where go state = if state.instructionsState.instructionsRead == 1000 then Done state.auxState else case nextInstruction of
+  where go state = case nextInstruction of
                       Nothing -> Done state.auxState
-                      Just instruction -> let nextInstructionsState = runInstruction state.instructionsState (trace (show instruction <> " - " <> show (showRegistry state.instructionsState.registry)) \_ -> instruction)
+                      Just instruction -> let nextInstructionsState = runInstruction state.instructionsState instruction
                                               nextAuxState = f instruction nextInstructionsState state.auxState
                                           in Loop {
-                                            instructionsState: nextInstructionsState {instructionsRead = nextInstructionsState.instructionsRead + 1},
+                                            instructionsState: nextInstructionsState,
                                             auxState: nextAuxState
                                           }
                    where nextInstruction = state.instructionsState.instructions !! state.instructionsState.position
@@ -163,8 +166,7 @@ solve instructions = runWithAuxState initialState initialAuxState f
   where initialState = {
           instructions: instructions,
           position: 0,
-          registry: makeInitialRegistry (const (fromInt 0)),
-          instructionsRead: 0
+          registry: makeInitialRegistry (const (fromInt 0))
         }
         initialAuxState = 0
         f (Multiply _ _) _ n = n + 1
@@ -174,15 +176,15 @@ solve' = (map <<< map) solve (getInput "./src/23.txt") >>= logShow
 
 -----
 
-solve2 :: Input -> Maybe BigInt
-solve2 instructions = runWithAuxState initialState initialAuxState f
-  where initialState = {
-          instructions: instructions,
-          position: 0,
-          registry: makeInitialRegistry (\c -> if c == 'a' then fromInt 1 else fromInt 0),
-          instructionsRead: 0
-        }
-        initialAuxState = Just (fromInt 0)
-        f _ s _ = Map.lookup 'h' s.registry
+-- by inspection we see that we just want to find the number of primes
+-- between 106,500 and 123,500 (inclusive)
 
-solve2' = (map <<< map) solve2 (getInput "./src/23.txt") >>= logShow
+isPrime :: Int -> Boolean
+isPrime n = foldl divides (range 2 limit)
+  where divides = any (\d -> n `mod` d == 0)
+        limit = floor $ sqrt $ DataInt.toNumber n
+
+rangeWithStep start end step = filter (\n -> n `mod` step == startParity) (range start end)
+  where startParity = start `mod` step
+-- solve2 = length $ filter isPrime (range 106500 123500)
+solve2 = length $ filter isPrime (rangeWithStep 106500 123500 17)
