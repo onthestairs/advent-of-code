@@ -7,6 +7,7 @@ import Data.Array (head, snoc, uncons)
 import Data.BigInt (BigInt, fromInt, pow, toBase)
 import Data.Foldable (length)
 import Data.Int (binary, toStringAs)
+import Data.List as List
 import Data.List.Lazy as LazyList
 import Data.Maybe (Maybe(..))
 import Data.String as String
@@ -53,46 +54,28 @@ aCriteria n = n `mod` four == zero
 bCriteria :: BigInt -> Boolean
 bCriteria n = n `mod` eight == zero
 
-type State = {
-  a :: BigInt,
-  b :: BigInt,
-  equalCount :: Int,
-  judgeCount :: Int,
-  asQueue :: Array BigInt,
-  bsQueue :: Array BigInt
-}
 
-potentiallyJudge :: State -> State
-potentiallyJudge state = case uncons state.asQueue of
-  Nothing -> state
-  Just { head: a, tail: as } -> case uncons state.bsQueue of
-    Nothing -> state
-    Just { head: b, tail: bs } ->
-      if lastBitsEqual a b
-      then state { asQueue = as, bsQueue = bs, judgeCount = state.judgeCount + 1, equalCount = state.equalCount + 1 }
-      else state { asQueue = as, bsQueue = bs, judgeCount = state.judgeCount + 1 }
+getNext :: BigInt -> BigInt -> (BigInt -> Boolean) -> BigInt
+getNext n factor predicate = tailRec go (f n)
+  where f n' = (n' * factor) `mod` modulo
+        go m = if predicate m then Done m else Loop (f m)
 
+fiveMillion :: Int
 fiveMillion = 5*1000*1000
--- fiveMillion = 5
 
 solve2 :: Int
 solve2 = tailRec go initialState
-  where initialState = {a: startA, b: startB, asQueue: [], bsQueue: [], judgeCount: 0, equalCount: 0}
+  where initialState = {a: startA, b: startB, judgeCount: 0, equalCount: 0}
         go state =
           if state.judgeCount == fiveMillion
           then Done state.equalCount
-          else Loop nextState
-          where nextA = (state.a * factorA) `mod` modulo
-                nextB = (state.b * factorB) `mod` modulo
-                isNextALegal = aCriteria nextA
-                nextAsQueue = if isNextALegal then snoc state.asQueue nextA else state.asQueue
-                isNextBLegal = bCriteria nextB
-                nextBsQueue = if isNextBLegal then snoc state.bsQueue nextB else state.bsQueue
-                nextState = potentiallyJudge {
-                  a: nextA,
-                  b: nextB,
-                  equalCount: state.equalCount,
-                  judgeCount: state.judgeCount,
-                  asQueue: nextAsQueue,
-                  bsQueue: nextBsQueue
-                }
+          else
+            let nextA = getNext state.a factorA aCriteria
+                nextB = getNext state.b factorB bCriteria
+                newEqualCount = if lastBitsEqual nextA nextB then state.equalCount + 1 else state.equalCount
+            in Loop {
+              a: nextA,
+              b: nextB,
+              judgeCount: state.judgeCount + 1,
+              equalCount: newEqualCount
+            }
